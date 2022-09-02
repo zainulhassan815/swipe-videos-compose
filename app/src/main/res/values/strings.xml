@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">ListPlayer</string>
+    <string name="cd_add_to_favorite">Add to Favorite</string>
+    <string name="cd_share">Share</string>
+    <string name="cd_download">Download</string>
+    <string name="cd_navigate_back">Navigate Back</string>
+    <string name="cd_play">Play</string>
+    <string name="cd_pause">Pause</string>
+</resources>
