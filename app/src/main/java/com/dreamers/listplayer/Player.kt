@@ -28,6 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import coil.compose.AsyncImage
+import com.dreamers.listplayer.components.LoadingIndicator
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
@@ -308,7 +309,7 @@ private fun Video(
                     )
                 }
             } else {
-                CircularProgressIndicator(
+                LoadingIndicator(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
