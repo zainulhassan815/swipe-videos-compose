@@ -6,4 +6,5 @@
     <string name="cd_navigate_back">Navigate Back</string>
     <string name="cd_play">Play</string>
     <string name="cd_pause">Pause</string>
+    <string name="cd_scroll_to_top">Scroll To Top</string>
 </resources>

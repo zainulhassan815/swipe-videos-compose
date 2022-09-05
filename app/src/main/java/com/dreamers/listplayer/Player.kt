@@ -3,12 +3,15 @@ package com.dreamers.listplayer
 import android.annotation.SuppressLint
 import android.util.Log
 import android.view.LayoutInflater
+import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +35,7 @@ import com.google.android.exoplayer2.ui.StyledPlayerView
 import dev.chrisbanes.snapper.ExperimentalSnapperApi
 import dev.chrisbanes.snapper.SnapOffsets
 import dev.chrisbanes.snapper.rememberSnapperFlingBehavior
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.random.Random
 
@@ -74,12 +78,13 @@ private fun determineCurrentlyPlayingItem(listState: LazyListState): Int? {
         .firstOrNull()
 }
 
-@OptIn(ExperimentalSnapperApi::class)
+@OptIn(ExperimentalSnapperApi::class, ExperimentalAnimationApi::class)
 @Composable
 fun Player(
     videos: List<Video> = SampleVideos,
     lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
 ) {
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val mediaItems = videos.map { MediaItem.fromUri(it.url) }
     val player = remember(context) {
@@ -119,26 +124,58 @@ fun Player(
         }
     }
 
+    val showScrollToTopFab by remember {
+        derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+    val scrollToTop: () -> Unit = {
+        scope.launch { listState.animateScrollToItem(0, 0) }
+    }
+
     Scaffold { paddingValues ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = paddingValues,
-            state = listState,
-            flingBehavior = rememberSnapperFlingBehavior(
-                lazyListState = listState,
-                snapOffsetForItem = SnapOffsets.Center,
-            )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
         ) {
-            items(
-                items = videos,
-                key = { it.url }
-            ) {
-                Video(
-                    modifier = Modifier.fillParentMaxSize(),
-                    player = player,
-                    video = it,
-                    index = videos.indexOf(it)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                flingBehavior = rememberSnapperFlingBehavior(
+                    lazyListState = listState,
+                    snapOffsetForItem = SnapOffsets.Center,
                 )
+            ) {
+                items(
+                    items = videos,
+                    key = { it.url }
+                ) {
+                    Video(
+                        modifier = Modifier.fillParentMaxSize(),
+                        player = player,
+                        video = it,
+                        index = videos.indexOf(it)
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 24.dp, bottom = 24.dp),
+                visible = showScrollToTopFab,
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut(),
+                label = stringResource(R.string.cd_scroll_to_top)
+            ) {
+                FloatingActionButton(
+                    onClick = scrollToTop,
+                    backgroundColor = MaterialTheme.colors.primary,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.cd_scroll_to_top)
+                    )
+                }
             }
         }
     }
