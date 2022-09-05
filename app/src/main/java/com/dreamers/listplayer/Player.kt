@@ -183,6 +183,7 @@ fun Player(
 data class PlayerState(
     val isReady: Boolean = false,
     val playing: Boolean = false,
+    val firstFrameRendered: Boolean = false,
 )
 
 @Composable
@@ -211,6 +212,13 @@ fun rememberPlaybackState(player: ExoPlayer, mediaItemIndex: Int): PlayerState {
                 super.onPlaybackStateChanged(playbackState)
                 updateState {
                     copy(isReady = playbackState == Player.STATE_READY)
+                }
+            }
+
+            override fun onRenderedFirstFrame() {
+                super.onRenderedFirstFrame()
+                updateState {
+                    copy(firstFrameRendered = true)
                 }
             }
         }
@@ -245,8 +253,17 @@ private fun Video(
 
     DisposableEffect(true) {
         onDispose {
-            playerView.player = null
-            Log.v("PlayerView", "Removing Player For $index")
+            if (playerView.player != null) {
+                playerView.player = null
+                Log.v("PlayerView", "Removing Player For $index")
+            }
+        }
+    }
+
+    LaunchedEffect(state) {
+        if (state.isReady && playerView.player == null) {
+            playerView.player = player
+            Log.v("PlayerView", "Adding Player For $index")
         }
     }
 
@@ -256,23 +273,18 @@ private fun Video(
         color = Color.Black,
     ) {
         Box {
-            Thumbnail(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .align(Alignment.Center),
-                url = video.thumbnail,
+            AndroidView(
+                modifier = Modifier.matchParentSize(),
+                factory = { playerView }
             )
 
-            if (state.isReady) {
-                AndroidView(
-                    modifier = Modifier.matchParentSize(),
-                    factory = {
-                        playerView.apply {
-                            this.player = player
-                            Log.v("PlayerView", "Adding Player For $index")
-                        }
-                    }
+            if (!state.firstFrameRendered) {
+                Thumbnail(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .align(Alignment.Center),
+                    url = video.thumbnail,
                 )
             }
 
