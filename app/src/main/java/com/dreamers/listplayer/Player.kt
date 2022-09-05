@@ -30,7 +30,11 @@ import com.dreamers.listplayer.components.Thumbnail
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
+import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.ui.StyledPlayerView
+import com.google.android.exoplayer2.upstream.DefaultHttpDataSource
+import com.google.android.exoplayer2.upstream.cache.Cache
+import com.google.android.exoplayer2.upstream.cache.CacheDataSource
 import dev.chrisbanes.snapper.ExperimentalSnapperApi
 import dev.chrisbanes.snapper.SnapOffsets
 import dev.chrisbanes.snapper.rememberSnapperFlingBehavior
@@ -82,13 +86,26 @@ private fun determineCurrentlyPlayingItem(listState: LazyListState): Int? {
 fun Player(
     videos: List<Video> = SampleVideos,
     lifecycleOwner: LifecycleOwner = LocalLifecycleOwner.current,
+    cache: Cache,
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val mediaItems = videos.map { MediaItem.fromUri(it.url) }
+    val mediaSources = videos.map {
+        val cacheDataSource = CacheDataSource.Factory()
+            .setCache(cache)
+            .setUpstreamDataSourceFactory(
+                DefaultHttpDataSource.Factory()
+                    .setAllowCrossProtocolRedirects(true)
+            )
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        ProgressiveMediaSource.Factory(cacheDataSource)
+            .createMediaSource(
+                MediaItem.fromUri(it.url)
+            )
+    }
     val player = remember(context) {
         ExoPlayer.Builder(context).build().apply {
-            addMediaItems(mediaItems)
+            addMediaSources(mediaSources)
             prepare()
             repeatMode = Player.REPEAT_MODE_ONE
             playWhenReady = true
