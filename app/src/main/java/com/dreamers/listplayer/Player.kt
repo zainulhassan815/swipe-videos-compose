@@ -13,6 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
@@ -22,6 +24,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
+import coil.compose.AsyncImage
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
@@ -34,9 +37,13 @@ import kotlin.random.Random
 
 data class Video(
     val url: String,
+    val thumbnail: String,
     val isFavorite: Boolean = false,
 )
 
+private val nameRegex = Regex("([A-Z])\\w+")
+
+// For details see: https://gist.github.com/jsturgis/3b19447b304616f18657
 val SampleVideos = listOf(
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4",
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/VolkswagenGTIReview.mp4",
@@ -51,7 +58,11 @@ val SampleVideos = listOf(
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4",
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4",
     "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WhatCarCanYouGetForAGrand.mp4"
-).map { Video(url = it, isFavorite = Random.nextBoolean()) }
+).map {
+    val name = nameRegex.find(it)?.groups?.firstOrNull()?.value
+    val thumb = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/$name.jpg"
+    Video(url = it, isFavorite = Random.nextBoolean(), thumbnail = thumb)
+}
 
 
 private fun determineCurrentlyPlayingItem(listState: LazyListState): Int? {
@@ -106,8 +117,6 @@ fun Player(
         if (currentItem != null && player.currentMediaItemIndex != currentItem) {
             player.seekTo(currentItem, 100L)
         }
-        Log.v("Player",
-            "Current Item: $currentItem, playerCurrentItem: ${player.currentMediaItemIndex}")
     }
 
     Scaffold { paddingValues ->
@@ -136,31 +145,36 @@ fun Player(
 }
 
 data class PlayerState(
-    val loading: Boolean,
-    val playing: Boolean,
+    val isReady: Boolean = false,
+    val playing: Boolean = false,
 )
 
 @Composable
 fun rememberPlaybackState(player: ExoPlayer, mediaItemIndex: Int): PlayerState {
 
-    var state by remember {
-        mutableStateOf(PlayerState(loading = true, playing = false))
+    var state by remember { mutableStateOf(PlayerState()) }
+
+    // Update current state only if current media index is same as provided media index.
+    val updateState: (block: PlayerState.() -> PlayerState) -> Unit = { block ->
+        if (player.currentMediaItemIndex == mediaItemIndex) {
+            val update = block(state)
+            if (update != state) state = update
+        }
     }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 super.onIsPlayingChanged(isPlaying)
-                if (player.currentMediaItemIndex == mediaItemIndex) {
-                    state = state.copy(playing = isPlaying)
+                updateState {
+                    copy(playing = isPlaying)
                 }
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 super.onPlaybackStateChanged(playbackState)
-                if (player.currentMediaItemIndex == mediaItemIndex) {
-                    val loaded = playbackState == Player.STATE_READY
-                    state = state.copy(loading = !loaded)
+                updateState {
+                    copy(isReady = playbackState == Player.STATE_READY)
                 }
             }
         }
@@ -188,7 +202,9 @@ private fun Video(
     val state = rememberPlaybackState(player, index)
     val context = LocalContext.current
     val playerView = remember {
-        LayoutInflater.from(context).inflate(R.layout.video_player_view, null, false) as StyledPlayerView
+        LayoutInflater
+            .from(context)
+            .inflate(R.layout.video_player_view, null, false) as StyledPlayerView
     }
 
     DisposableEffect(true) {
@@ -204,7 +220,15 @@ private fun Video(
         color = Color.Black,
     ) {
         Box {
-            if (!state.loading) {
+            Thumbnail(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .align(Alignment.Center),
+                url = video.thumbnail,
+            )
+
+            if (state.isReady) {
                 AndroidView(
                     modifier = Modifier.matchParentSize(),
                     factory = {
@@ -228,11 +252,7 @@ private fun Video(
                 )
             }
 
-            if (state.loading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
+            if (state.isReady) {
                 IconButton(
                     modifier = Modifier.align(Alignment.Center),
                     onClick = {
@@ -250,6 +270,10 @@ private fun Video(
                         )
                     )
                 }
+            } else {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center)
+                )
             }
 
             VideoActions(
@@ -262,6 +286,24 @@ private fun Video(
                 onDownloadClick = onDownloadClick,
             )
         }
+    }
+}
+
+@Composable
+fun Thumbnail(
+    modifier: Modifier = Modifier,
+    url: String,
+) {
+    Box(
+        modifier = modifier.fillMaxSize()
+    ) {
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            modifier = Modifier.matchParentSize(),
+            contentScale = ContentScale.Crop,
+            filterQuality = FilterQuality.Medium,
+        )
     }
 }
 

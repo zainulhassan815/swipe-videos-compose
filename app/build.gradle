@@ -65,4 +65,6 @@ dependencies {
     implementation "com.google.android.exoplayer:exoplayer-ui:$exoplayer_version"
 
     implementation "dev.chrisbanes.snapper:snapper:0.3.0"
+
+    implementation "io.coil-kt:coil-compose:2.2.0"
 }
