@@ -104,13 +104,16 @@ fun Player(
             )
     }
     val player = remember(context) {
-        ExoPlayer.Builder(context).build().apply {
-            addMediaSources(mediaSources)
-            prepare()
-            repeatMode = Player.REPEAT_MODE_ONE
-            playWhenReady = true
-            seekTo(0, 100L)
-        }
+        ExoPlayer.Builder(context)
+            .setUseLazyPreparation(false)
+            .build()
+            .apply {
+                addMediaSources(mediaSources)
+                prepare()
+                repeatMode = Player.REPEAT_MODE_ONE
+                playWhenReady = true
+                seekTo(0, 100L)
+            }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -132,11 +135,18 @@ fun Player(
     }
 
     val listState = rememberLazyListState()
-    val currentItem = determineCurrentlyPlayingItem(listState)
+    val currentItem by remember {
+        derivedStateOf {
+            determineCurrentlyPlayingItem(listState)
+        }
+    }
 
     LaunchedEffect(currentItem) {
         if (currentItem != null && player.currentMediaItemIndex != currentItem) {
-            player.seekTo(currentItem, 100L)
+            player.apply {
+                seekTo(currentItem!!, 100L)
+                playWhenReady = true
+            }
         }
     }
 
@@ -201,6 +211,7 @@ data class PlayerState(
     val isReady: Boolean = false,
     val playing: Boolean = false,
     val firstFrameRendered: Boolean = false,
+    val currentMediaItem: MediaItem = MediaItem.EMPTY,
 )
 
 @Composable
@@ -238,6 +249,11 @@ fun rememberPlaybackState(player: ExoPlayer, mediaItemIndex: Int): PlayerState {
                     copy(firstFrameRendered = true)
                 }
             }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                super.onMediaItemTransition(mediaItem, reason)
+                state = state.copy(currentMediaItem = mediaItem ?: MediaItem.EMPTY)
+            }
         }
         player.addListener(listener)
         onDispose {
@@ -268,19 +284,19 @@ private fun Video(
             .inflate(R.layout.video_player_view, null, false) as StyledPlayerView
     }
 
-    DisposableEffect(true) {
+    DisposableEffect(state) {
         onDispose {
-            if (playerView.player != null) {
+            if (state.currentMediaItem != MediaItem.EMPTY && state.currentMediaItem != player.getMediaItemAt(index)) {
                 playerView.player = null
-                Log.v("PlayerView", "Removing Player For $index")
+                Log.v("PlayerView", "$index: Detach Player From PlayerView")
             }
         }
     }
 
     LaunchedEffect(state) {
-        if (state.isReady && playerView.player == null) {
+        if (state.isReady && playerView.player != player && player.currentMediaItemIndex == index) {
             playerView.player = player
-            Log.v("PlayerView", "Adding Player For $index")
+            Log.v("PlayerView", "$index: Attach Player To Player View")
         }
     }
 
@@ -292,7 +308,7 @@ private fun Video(
         Box {
             AndroidView(
                 modifier = Modifier.matchParentSize(),
-                factory = { playerView }
+                factory = { playerView },
             )
 
             if (!state.firstFrameRendered) {
